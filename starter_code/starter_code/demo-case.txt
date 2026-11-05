@@ -1,0 +1,29 @@
+-- Demonstration of CASE
+
+-- You might find the SQL CASE expression helpful, see:
+-- https://www.postgresql.org/docs/current/functions-conditional.html#FUNCTIONS-CASE
+-- Here is an example where we generate a different string value based on whether the 
+-- number is even or odd.
+
+csc343h-marinat=> CREATE TABLE Integers(num integer);
+CREATE TABLE
+csc343h-marinat=> INSERT INTO Integers values (1), (2), (10), (13), (55), (42);
+INSERT 0 6
+
+csc343h-marinat=> SELECT
+csc343h-marinat->   num,
+csc343h-marinat->   CASE   
+csc343h-marinat->        WHEN num % 2 = 0 THEN 'even' 
+csc343h-marinat->        WHEN num % 2 <> 0 THEN 'odd' 
+csc343h-marinat->        ELSE 'can''t happen'
+csc343h-marinat->   END AS type
+csc343h-marinat-> FROM Integers;
+ num | type 
+-----+------
+   1 | odd
+   2 | even
+  10 | even
+  13 | odd
+  55 | odd
+  42 | even
+(6 rows)

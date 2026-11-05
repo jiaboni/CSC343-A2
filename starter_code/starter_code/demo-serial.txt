@@ -1,0 +1,189 @@
+-- This demo shows how we can automatically generate a series of
+-- values for an attribute in psql. 
+-- In A2, we use type SEQUENCE to do this.
+-- The demo below explains a related type, SERIAL, to provide context.
+
+-- Part 1: SERIAL
+
+-- Official documentation on SERIAL:
+-- https://www.postgresql.org/docs/16/datatype-numeric.html#DATATYPE-SERIAL
+
+-- Here we define a table with an attribute whose type is SERIAL.
+-- SERIAL is not a true data type, but rather a convenient way of
+-- creating an auto-incrementing integer attribute. 
+
+csc343h-marinat=> CREATE TABLE clients (
+csc343h-marinat(>     id SERIAL PRIMARY KEY,
+csc343h-marinat(>     email VARCHAR(30)
+csc343h-marinat(> );
+CREATE TABLE
+
+
+-- Declaring the id column as SERIAL automatically associates it with
+-- an underlying sequence. 
+-- If a value is not provided for the id column,
+-- the next value from the sequence is used by default.
+--
+-- By default, the sequence starts at 1 and increments 
+-- each time a new value is generated.
+
+csc343h-marinat=> INSERT INTO Clients(email) VALUES
+csc343h-marinat-> ('marina@gmail.com'),
+csc343h-marinat-> ('dianeh@cs.toronto.ca');
+INSERT 0 2
+
+
+csc343h-marinat=> SELECT * FROM Clients;
+ id |        email         
+----+----------------------
+  1 | marina@gmail.com
+  2 | dianeh@cs.toronto.ca
+(2 rows)
+
+
+-- However, PostgreSQL won't stop you from explicitly providing 
+-- a value for the id column either.
+
+csc343h-marinat=> INSERT INTO Clients VALUES 
+csc343h-marinat-> (3, 'user_provided@yahoo.com');
+INSERT 0 2
+
+csc343h-marinat=> SELECT * FROM Clients;
+ id |          email          
+----+-------------------------
+  1 | marina@gmail.com
+  2 | dianeh@cs.toronto.ca
+  3 | user_provided@yahoo.com
+(3 rows)
+
+-- Note, however that this could cause issues if you are using 
+-- a SERIAL column with a primary key as is the case here. 
+-- The next insertion statement doesn't provide a value for id 
+-- so the sequence will be used.
+-- The next value to be generated in the sequence is 3, 
+-- which violates our key constraint. 
+
+csc343h-marinat=> INSERT INTO Clients(email) VALUES
+csc343h-marinat-> ('nextvalis3@yahoo.com');
+ERROR:  duplicate key value violates unique constraint "clients_pkey"
+DETAIL:  Key (id)=(3) already exists.
+
+-- Even though the previous insert statement failed, 
+-- the sequence was advanced by 1. 
+-- As a result, the next statement executes successfully. 
+-- The fact that the sequence is advanced regardless of 
+-- whether the insert statement is successful or not means 
+-- that we might end up with gaps between 
+-- values in our id column. 
+-- Can you think of a case when that might happen?  
+-- For the purposes of A2, we will live with that. 
+
+csc343h-marinat=> INSERT INTO Clients(email) VALUES
+csc343h-marinat-> ('nextvalis4@yahoo.com');
+INSERT 0 1
+
+csc343h-marinat=> SELECT * FROM Clients;
+ id |          email          
+----+-------------------------
+  1 | marina@gmail.com
+  2 | dianeh@cs.toronto.ca
+  3 | user_provided@yahoo.com
+  4 | nextvalis4@yahoo.com
+(4 rows)
+
+-- We can also manipulate the underlying sequence used by a 
+-- SERIAL column, as shown below.
+-- By default, PostgreSQL names this sequence using the table name,
+-- the SERIAL column name, and the suffix '_seq'.
+
+csc343h-marinat=> SELECT setval('clients_id_seq', 35);
+ setval 
+--------
+     35
+(1 row)
+
+-- The next time we insert a row without providing a value for 
+-- the SERIAL attribute, 
+-- postgreSQL advances the value by one and then uses it.
+
+csc343h-marinat=> INSERT INTO Clients(email) VALUES
+csc343h-marinat-> ('clementine@gmail.com');
+INSERT 0 1
+
+csc343h-marinat=> SELECT * FROM Clients;
+ id |          email          
+----+-------------------------
+  1 | marina@gmail.com
+  2 | dianeh@cs.toronto.ca
+  3 | user_provided@yahoo.com
+  4 | nextvalis4@yahoo.com
+ 36 | clementine@gmail.com
+(5 rows)
+
+
+-- You can provide a third argument to setval.
+-- If you omit this argument (as in the example above), 
+-- it defaults to true.
+-- In that case, the sequence is advanced before 
+-- returning the next value.
+-- This is why we get 36 instead of 35.
+-- If the third argument is false, the specified value is returned
+-- without advancing the sequence first.
+
+
+csc343h-marinat=> SELECT setval('clients_id_seq', 6, false);  
+ setval 
+--------
+      6
+(1 row)
+
+csc343h-marinat=> INSERT INTO Clients(email) VALUES
+csc343h-marinat-> ('icecream@gmail.com');
+INSERT 0 1
+
+csc343h-marinat=> SELECT * FROM Clients;
+ id |          email          
+----+-------------------------
+  1 | marina@gmail.com
+  2 | dianeh@cs.toronto.ca
+  3 | user_provided@yahoo.com
+  4 | nextvalis4@yahoo.com
+ 36 | clementine@gmail.com
+  6 | icecream@gmail.com
+(6 rows)
+
+
+
+-- Part 2: SEQUENCE
+
+-- Official documentation on SEQUENCE: 
+https://www.postgresql.org/docs/16/functions-sequence.html
+
+-- The SERIAL type uses a SEQUENCE to implement its functionality. 
+-- We can therefore define and use our own SEQUENCE instead. 
+-- The use case is exactly as discussed above. However, with a
+-- SEQUENCE, you get to choose a name for it.
+
+csc343h-marinat=> CREATE SEQUENCE my_seq;
+CREATE SEQUENCE
+
+csc343h-marinat=> CREATE TABLE Orders (
+csc343h-marinat(>     id bigint default nextval('my_seq'), 
+csc343h-marinat(>     item varchar(200)
+csc343h-marinat(> );
+CREATE TABLE
+
+csc343h-marinat=> INSERT INTO Orders(item) VALUES ('pizza'), ('steak');
+INSERT 0 2
+csc343h-marinat=> SELECT * FROM Orders;
+ id | item  
+----+-------
+  1 | pizza
+  2 | steak
+(2 rows)
+
+-- For this assignment, you will be working with a SEQUENCE we have defined
+-- in the DDL file. It is called group_id_seq, and it is used to automatically
+-- generate a sequence of unique group IDs. You will find that you need to
+-- use function nextval (to advance the value of group_id_seq), and also
+-- setval (to set it to a desired value).
