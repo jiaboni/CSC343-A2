@@ -114,13 +114,52 @@ class Markus:
         day.
         """
         # TODO - complete this method
-
+        deletions = 0
+        if self.connection:
+            curr = self.connection.cursor()
+            curr2 = self.connection.cursor()
+        else:
+            return -1
         try:
-            pass
+            curr.execute("SELECT * FROM MarkusUser WHERE username = %s AND type = 'student';", [username])
+            if curr.rowcount == 0:
+                curr.close()
+                curr2.close()
+                return -1
+            # curr.execute("CREATE OR REPLACE VIEW AssignmentMembership AS " \
+            #             "SELECT * FROM membership NATURAL JOIN assignmentgroup NATURAL JOIN assignment;")
+            # curr.execute("SELECT group_id FROM AssignmentMembership WHERE due_date::DATE > %s;", [date])
+            curr.execute("SELECT Membership.group_id FROM Membership NATURAL JOIN AssignmentGroup NATURAL JOIN Assignment WHERE due_date::DATE > %s AND Membership.username = %s;", [date, username])
+            for row in curr:
+                id = row[0]
+                curr2.execute("DELETE FROM Membership WHERE group_id = %s AND username = %s;", [id, username])
+                deletions += curr2.rowcount
+
+                curr2.execute("SELECT * FROM Membership WHERE group_id = %s;", [id])
+                if curr2.rowcount == 0:
+                    curr2.execute("DELETE FROM AssignmentGroup WHERE group_id = %s;", [id])
+
+                # curr2.execute("SELECT * FROM Membership WHERE group_id = %s AND username = %s;", [id, username])
+                # if curr2.rowcount > 0:
+                #     deletions += 1
+                # curr2.execute("DELETE FROM Membership WHERE group_id = %s AND username = %s;", [id, username])
+                # curr2.execute("SELECT * FROM Membership WHERE group_id = %s;", [id])
+                # if curr2.rowcount == 0:
+                #     curr2.execute("DELETE FROM AssignmentGroup WHERE group_id = %s;", [id])
+            self.connection.commit()
+
+            curr.close()
+            curr2.close()
+            return deletions
+
         except pg.Error as ex:
             # You may find it helpful to uncomment this line while debugging,
             # as it will show you all the details of the error that occurred:
             # raise ex
+            if self.connection:
+                self.connection.rollback()
+                curr.close()
+                curr2.close()
             return -1
 
     def create_groups(
@@ -174,12 +213,84 @@ class Markus:
         """
         # TODO - complete this method
 
+        if self.connection:
+            curr = self.connection.cursor()
+            curr2 = self.connection.cursor()
+        else:
+            return False
+
         try:
-            pass
+
+            curr.execute("SELECT * FROM MarkusUser WHERE type = 'student';")
+            if curr.rowcount == 0:
+                curr.close()
+                curr2.close()
+                return True
+            curr.execute("SELECT * FROM Assignment WHERE assignment_id = %s;", [assignment_to_group])
+            if curr.rowcount == 0:
+                curr.close()
+                curr2.close()
+                return False
+            curr.execute("SELECT * FROM Assignment WHERE assignment_id = %s;", [other_assignment])
+            if curr.rowcount == 0:
+                curr.close()
+                curr2.close()
+                return False
+            curr.execute("SELECT * FROM AssignmentGroup WHERE assignment_id = %s;", [assignment_to_group])
+            if curr.rowcount > 0:
+                curr.close()
+                curr2.close()
+                return False
+
+            curr.execute("SELECT group_max FROM Assignment WHERE assignment_id = %s;", [assignment_to_group])
+            k = 1
+            for row in curr:
+                k = int(row[0])
+
+            curr.execute("SELECT MarkusUser.username, a.mark FROM MarkusUser LEFT JOIN (" \
+                        "SELECT Membership.username, mark FROM Membership " \
+                        "NATURAL JOIN AssignmentGroup " \
+                        "LEFT JOIN Result USING(group_id) WHERE AssignmentGroup.assignment_id = %s) a USING(username)" \
+                        "WHERE MarkusUser.type = 'student' ORDER BY mark DESC NULLS LAST, MarkusUser.username;", [other_assignment])
+
+            counter = 0 
+
+            curr2.execute("SELECT nextval('group_id_seq');")
+
+            group_id = 1
+            for row in curr2:
+                group_id = row[0]
+
+            curr2.execute("INSERT INTO AssignmentGroup (group_id, assignment_id, repo) values (%s, %s, %s);", [group_id, assignment_to_group, repo_prefix + "/group_" + str(group_id)])
+            
+            for row in curr:
+                if counter >= k:
+                    counter = 0
+                    curr2.execute("SELECT nextval('group_id_seq');")
+                    for gid in curr2:
+                        group_id = gid[0]
+                    curr2.execute("INSERT INTO AssignmentGroup (group_id, assignment_id, repo) VALUES (%s, %s, %s);", [group_id, assignment_to_group, repo_prefix + "/group_" + str(group_id)])
+
+                curr2.execute("INSERT INTO Membership VALUES (%s, %s);", [row[0], group_id])
+
+                counter += 1
+
+            curr.close()
+            curr2.close()
+            self.connection.commit()
+            return True
+            
+
+            
+
         except pg.Error as ex:
             # You may find it helpful to uncomment this line while debugging,
             # as it will show you all the details of the error that occurred:
             # raise ex
+            if self.connection:
+                curr.close()
+                curr2.close()
+                self.connection.rollback()
             return False
 
 
