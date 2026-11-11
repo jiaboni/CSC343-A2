@@ -293,7 +293,44 @@ class Markus:
                 self.connection.rollback()
             return False
 
+    def drop_student(self, username: str, target_student: str, group_id: int) -> bool:
+        if self.connection: 
+            curr = self.connection.cursor()
+        else:
+            return False
+        
+        try:
+            curr.execute("SELECT * FROM Membership WHERE group_id = %s AND (username = %s OR username = %s);", [group_id, username, target_student])
+            if curr.rowcount != 2:
+                curr.close()
+                return False
+            
+            curr.execute("SELECT group_min FROM Assignment NATURAL JOIN AssignmentGroup WHERE group_id = %s;", [group_id])
+            group_min = 1
+            for row in curr:
+                group_min = row[0]
 
+            current_size = 0
+            curr.execute("SELECT count(*) FROM Membership WHERE group_id = %s;", [group_id])
+            for row in curr:
+                current_size = row[0]
+
+            if current_size <= group_min:
+                curr.close()
+                return False
+            
+            curr.execute("DELETE FROM Membership WHERE username = %s AND group_id = %s;", [target_student, group_id] )
+
+            self.connection.commit()
+            curr.close()
+            return True
+        
+        except:
+            if self.connection:
+                curr.close()
+                self.connection.rollback()
+            return False
+            
 if __name__ == "__main__":
     # Un comment-out the next two lines if you would like all the doctest
     # examples (see ">>>" in the method and class docstrings) to be run
@@ -303,4 +340,11 @@ if __name__ == "__main__":
 
     # You can add testing code here or even better, add your tests in a
     # separate file like we do in test_preliminary.py.
-    pass
+    a2 = Markus()
+    try:
+        connected = a2.connect("csc343h-iabonij4", "iabonij4", "")
+        assert connected, f"[Connect] Expected True | Got {connected}."
+
+        a2.drop_student("weaslyr30", "grangerh1", 6)
+    finally:
+        a2.disconnect()
